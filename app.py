@@ -5,10 +5,15 @@ import requests
 import json
 import re
 import pandas as pd
+from deep_translator import DeeplTranslator
+import deepl
+
 
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
 supabase= create_client(url, key)
+auth_key: str = os.environ.get("DEEPL_KEY")
+translator = deepl.Translator(auth_key)
 
 app = Flask(__name__)
 
@@ -118,6 +123,11 @@ def get_second_price(history):
 def data_prep():
     data = get_groceries_data()
     df = pd.json_normalize(data)
+    df = price_calculations(df)
+    
+    return df
+
+def price_calculations(df):
     # Calculate the average price (assuming 'priceHistory' is always present)
     df['average_price'] = df['priceHistory'].apply(lambda history: sum(entry['price'] for entry in history if entry.get('price') is not None) / len(history) if history else None)
     # Extract the newest old price (first entry in "priceHistory")
@@ -130,7 +140,7 @@ def data_prep():
     df = df.reindex(df['price_difference'].abs().sort_values(ascending=False).index)
     # Create a column for the percentage of the difference
     df['percentage_difference'] = (df['price_difference'] / df['new_price']) * 100
-    print("DATA PREPARED: ")
+    print("AFTER PRICE CALC: ")
     print(df)
     return df
 
@@ -163,4 +173,23 @@ def top_ten():
     posTop = topten[topten['PriceDifference'] > 0.0] 
     print("TOPTEN over 0 diff: ")
     print(posTop.head(25))
-    return posTop
+    posTop = translate_names(posTop)
+    print("POS TOP: ")
+    print(posTop)
+    #return posTop
+    return "OK"
+
+def translate_names(data):
+    print("NAMES: ")
+    names = data['Name']
+    translated_names = [] 
+
+    for n in names:
+        translated_names.append(translator.translate_text(n, target_lang="EN-US"))
+
+    data["EN_Names"] = translated_names 
+    print("Translated Names :")
+    for t in translated_names:
+        print(t.text)
+
+    return data
